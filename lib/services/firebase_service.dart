@@ -1,0 +1,221 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:uuid/uuid.dart';
+import '../models/message_model.dart';
+import '../models/group_model.dart';
+import '../models/user_model.dart';
+
+// Simple Firebase Service - Easy to understand for beginners
+class FirebaseService {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final Uuid _uuid = Uuid();
+
+  // Send a message to another user
+  Future<void> sendMessage(String receiverId, String message) async {
+    try {
+      // Create a unique chat ID (combine both user IDs)
+      String chatId = _getChatId(receiverId);
+      
+      // Create message model
+      MessageModel newMessage = MessageModel(
+        messageId: _uuid.v4(),
+        senderId: _getCurrentUserId(),
+        message: message,
+        timestamp: DateTime.now(),
+      );
+
+      // Save message to Firestore
+      await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .doc(newMessage.messageId)
+          .set(newMessage.toMap());
+    } catch (e) {
+      print('Error sending message: $e');
+    }
+  }
+
+  // Get messages for a chat
+  Stream<List<MessageModel>> getMessages(String receiverId) {
+    String chatId = _getChatId(receiverId);
+    
+    return _firestore
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            return MessageModel.fromMap(doc.data());
+          }).toList();
+        });
+  }
+
+  // Create a new group
+  Future<void> createGroup(String groupName, List<String> memberIds) async {
+    try {
+      String groupId = _uuid.v4();
+      
+      GroupModel newGroup = GroupModel(
+        groupId: groupId,
+        groupName: groupName,
+        createdBy: _getCurrentUserId(),
+        members: memberIds,
+        createdAt: DateTime.now(),
+      );
+
+      // Save group to Firestore
+      await _firestore
+          .collection('groups')
+          .doc(groupId)
+          .set(newGroup.toMap());
+    } catch (e) {
+      print('Error creating group: $e');
+    }
+  }
+
+  // Send message to a group
+  Future<void> sendGroupMessage(String groupId, String message) async {
+    try {
+      MessageModel newMessage = MessageModel(
+        messageId: _uuid.v4(),
+        senderId: _getCurrentUserId(),
+        message: message,
+        timestamp: DateTime.now(),
+      );
+
+      // Save message to group chat
+      await _firestore
+          .collection('groups')
+          .doc(groupId)
+          .collection('messages')
+          .doc(newMessage.messageId)
+          .set(newMessage.toMap());
+    } catch (e) {
+      print('Error sending group message: $e');
+    }
+  }
+
+  // Get group messages
+  Stream<List<MessageModel>> getGroupMessages(String groupId) {
+    return _firestore
+        .collection('groups')
+        .doc(groupId)
+        .collection('messages')
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            return MessageModel.fromMap(doc.data());
+          }).toList();
+        });
+  }
+
+  // Get user's groups
+  Stream<List<GroupModel>> getUserGroups() {
+    return _firestore
+        .collection('groups')
+        .where('members', arrayContains: _getCurrentUserId())
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            return GroupModel.fromMap(doc.data());
+          }).toList();
+        });
+  }
+
+  // Get user's chats (recent conversations)
+  Stream<List<UserModel>> getUserChats() {
+    // This is a simplified version - in a real app, you'd track recent chats
+    return _firestore
+        .collection('users')
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs
+              .where((doc) => doc.id != _getCurrentUserId())
+              .map((doc) {
+                return UserModel.fromMap(doc.data());
+              }).toList();
+        });
+  }
+
+  // Helper method to get current user ID
+  String _getCurrentUserId() {
+    // Get the current user ID from Firebase Auth
+    final user = _auth.currentUser;
+    if (user != null) {
+      return user.uid;
+    }
+    throw Exception('User not authenticated');
+  }
+
+  // Helper method to create chat ID
+  String _getChatId(String receiverId) {
+    String currentUserId = _getCurrentUserId();
+    // Create a consistent chat ID by sorting user IDs
+    List<String> userIds = [currentUserId, receiverId];
+    userIds.sort();
+    return userIds.join('_');
+  }
+
+  // Anonymous chat - create a temporary chat room
+  Future<String> createAnonymousChat() async {
+    try {
+      String chatId = _uuid.v4();
+      
+      // Create anonymous chat document
+      await _firestore
+          .collection('anonymous_chats')
+          .doc(chatId)
+          .set({
+        'chatId': chatId,
+        'createdAt': DateTime.now(),
+        'active': true,
+      });
+
+      return chatId;
+    } catch (e) {
+      print('Error creating anonymous chat: $e');
+      return '';
+    }
+  }
+
+  // Send anonymous message
+  Future<void> sendAnonymousMessage(String chatId, String message) async {
+    try {
+      MessageModel newMessage = MessageModel(
+        messageId: _uuid.v4(),
+        senderId: 'anonymous_${_uuid.v4()}',
+        message: message,
+        timestamp: DateTime.now(),
+      );
+
+      await _firestore
+          .collection('anonymous_chats')
+          .doc(chatId)
+          .collection('messages')
+          .doc(newMessage.messageId)
+          .set(newMessage.toMap());
+    } catch (e) {
+      print('Error sending anonymous message: $e');
+    }
+  }
+
+  // Get anonymous chat messages
+  Stream<List<MessageModel>> getAnonymousMessages(String chatId) {
+    return _firestore
+        .collection('anonymous_chats')
+        .doc(chatId)
+        .collection('messages')
+        .orderBy('timestamp', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            return MessageModel.fromMap(doc.data());
+          }).toList();
+        });
+  }
+}

@@ -1,11 +1,11 @@
 {
-    "name": "chat_app",
-    "short_name": "chat_app",
+    "name": "Chat App",
+    "short_name": "Chat App",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "A modern chat application built with Flutter and Firebase.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

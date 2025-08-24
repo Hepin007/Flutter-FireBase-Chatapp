@@ -18,21 +18,75 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="A modern chat application built with Flutter and Firebase.">
 
   <!-- iOS meta tags & icons -->
-  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="chat_app">
+  <meta name="apple-mobile-web-app-title" content="Chat App">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>chat_app</title>
+  <title>Chat App</title>
   <link rel="manifest" href="manifest.json">
+
+  <script>
+    // The value below is injected by flutter build, do not touch.
+    const serviceWorkerVersion = null;
+  </script>
+  <!-- This script adds the flutter initialization JS code -->
+  <script src="flutter.js" defer></script>
 </head>
 <body>
-  <script src="flutter_bootstrap.js" async></script>
+  <!-- Firebase Configuration -->
+  <script type="module">
+    // Import the functions you need from the SDKs you need
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getAuth } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+    import { getFirestore } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getStorage } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+
+    // Your web app's Firebase configuration
+    // For Firebase JS SDK v9.0.0 and later, measurementId is optional
+    const firebaseConfig = {
+      apiKey: "AIzaSyC...", // Replace with your actual API key
+      authDomain: "your-project-id.firebaseapp.com", // Replace with your actual auth domain
+      projectId: "your-project-id", // Replace with your actual project ID
+      storageBucket: "your-project-id.appspot.com", // Replace with your actual storage bucket
+      messagingSenderId: "123456789", // Replace with your actual sender ID
+      appId: "1:123456789:web:abc123def456", // Replace with your actual app ID
+      measurementId: "G-XXXXXXXXXX" // Optional: Replace with your measurement ID
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+
+    // Make Firebase available globally for Flutter
+    window.firebaseApp = app;
+    window.firebaseAuth = auth;
+    window.firebaseFirestore = db;
+    window.firebaseStorage = storage;
+  </script>
+
+  <script>
+    window.addEventListener('load', function(ev) {
+      // Download main.dart.js
+      _flutter.loader.loadEntrypoint({
+        serviceWorker: {
+          serviceWorkerVersion: serviceWorkerVersion,
+        },
+        onEntrypointLoaded: function(engineInitializer) {
+          engineInitializer.initializeEngine().then(function(appRunner) {
+            appRunner.runApp();
+          });
+        }
+      });
+    });
+  </script>
 </body>
 </html>
