@@ -63,7 +63,44 @@ class ChatsScreen extends StatelessWidget {
           itemCount: users.length,
           itemBuilder: (context, index) {
             UserModel user = users[index];
-            return _buildChatTile(context, user);
+            return Dismissible(
+              key: ValueKey(user.uid),
+              direction: DismissDirection.endToStart,
+              background: Container(
+                color: Colors.red,
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: const Icon(Icons.delete, color: Colors.white),
+              ),
+              confirmDismiss: (_) async {
+                return await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Delete chat'),
+                        content: const Text('Remove this chat from your list? Messages can also be deleted.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Remove'),
+                          ),
+                        ],
+                      ),
+                    ) ??
+                    false;
+              },
+              onDismissed: (_) async {
+                // Delete only metadata by default
+                await firebaseService.deleteChatForCurrentUser(user.uid, deleteMessages: false);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Chat removed')),
+                );
+              },
+              child: _buildChatTile(context, user),
+            );
           },
         );
       },
@@ -110,6 +147,36 @@ class ChatsScreen extends StatelessWidget {
             ),
           ),
         );
+      },
+
+      // Long press to delete messages as well
+      onLongPress: () async {
+        final firebaseService = FirebaseService();
+        final bool? deleteMsgs = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Delete chat messages'),
+            content: const Text('Also delete all messages in this conversation? This cannot be undone.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Delete messages'),
+              ),
+            ],
+          ),
+        );
+        if (deleteMsgs == true) {
+          await firebaseService.deleteChatForCurrentUser(user.uid, deleteMessages: true);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Messages deleted')),
+            );
+          }
+        }
       },
       
       // Trailing icon

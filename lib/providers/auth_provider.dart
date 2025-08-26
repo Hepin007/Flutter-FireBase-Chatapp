@@ -58,6 +58,19 @@ class AuthProvider extends ChangeNotifier {
     required String fullName,
   }) async {
     try {
+      // Enforce unique username (case-insensitive)
+      final String usernameLower = username.trim().toLowerCase();
+      final QuerySnapshot existing = await _firestore
+          .collection('users')
+          .where('usernameLower', isEqualTo: usernameLower)
+          .limit(1)
+          .get();
+
+      if (existing.docs.isNotEmpty) {
+        // Username already taken
+        return false;
+      }
+
       // Create user with email and password
       UserCredential result = await _auth.createUserWithEmailAndPassword(
         email: email,
@@ -74,10 +87,13 @@ class AuthProvider extends ChangeNotifier {
       );
 
       // Save user data to Firestore
+      final Map<String, dynamic> userData = newUser.toMap();
+      // Store lowercase username to allow case-insensitive uniqueness checks/search
+      userData['usernameLower'] = usernameLower;
       await _firestore
           .collection('users')
           .doc(result.user!.uid)
-          .set(newUser.toMap());
+          .set(userData);
 
       return true;
     } catch (e) {
@@ -116,10 +132,12 @@ class AuthProvider extends ChangeNotifier {
   // Search user by username or phone number
   Future<UserModel?> searchUser(String searchTerm) async {
     try {
-      // Search by username
+      final String term = searchTerm.trim();
+
+      // Search by username (case-insensitive via usernameLower)
       QuerySnapshot usernameQuery = await _firestore
           .collection('users')
-          .where('username', isEqualTo: searchTerm)
+          .where('usernameLower', isEqualTo: term.toLowerCase())
           .get();
 
       if (usernameQuery.docs.isNotEmpty) {
@@ -131,7 +149,7 @@ class AuthProvider extends ChangeNotifier {
       // Search by phone number
       QuerySnapshot phoneQuery = await _firestore
           .collection('users')
-          .where('phoneNumber', isEqualTo: searchTerm)
+          .where('phoneNumber', isEqualTo: term)
           .get();
 
       if (phoneQuery.docs.isNotEmpty) {

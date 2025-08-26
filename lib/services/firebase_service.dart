@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../models/message_model.dart';
 import '../models/group_model.dart';
 import '../models/user_model.dart';
+import '../models/chat_summary.dart';
 
 // Simple Firebase Service - Easy to understand for beginners
 class FirebaseService {
@@ -32,6 +33,14 @@ class FirebaseService {
           .collection('messages')
           .doc(newMessage.messageId)
           .set(newMessage.toMap());
+
+      // Upsert chat metadata for both users
+      await _upsertChatSummaryForUsers(
+        chatId: chatId,
+        otherUserId: receiverId,
+        lastMessage: message,
+        timestamp: newMessage.timestamp,
+      );
     } catch (e) {
       print('Error sending message: $e');
     }
@@ -129,16 +138,26 @@ class FirebaseService {
 
   // Get user's chats (recent conversations)
   Stream<List<UserModel>> getUserChats() {
-    // This is a simplified version - in a real app, you'd track recent chats
+    // Stream chat summaries for current user and resolve to user objects
+    final String currentUserId = _getCurrentUserId();
     return _firestore
-        .collection('users')
+        .collection('user_chats')
+        .doc(currentUserId)
+        .collection('chats')
+        .orderBy('lastTimestamp', descending: true)
         .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .where((doc) => doc.id != _getCurrentUserId())
-              .map((doc) {
-                return UserModel.fromMap(doc.data());
-              }).toList();
+        .asyncMap((snapshot) async {
+          final List<UserModel> result = [];
+          for (final doc in snapshot.docs) {
+            final data = doc.data();
+            final otherId = data['otherUserId'] as String? ?? '';
+            if (otherId.isEmpty) continue;
+            final userDoc = await _firestore.collection('users').doc(otherId).get();
+            if (userDoc.exists) {
+              result.add(UserModel.fromMap(userDoc.data() as Map<String, dynamic>));
+            }
+          }
+          return result;
         });
   }
 
@@ -159,6 +178,78 @@ class FirebaseService {
     List<String> userIds = [currentUserId, receiverId];
     userIds.sort();
     return userIds.join('_');
+  }
+
+  // Upsert chat summary for both users
+  Future<void> _upsertChatSummaryForUsers({
+    required String chatId,
+    required String otherUserId,
+    required String lastMessage,
+    required DateTime timestamp,
+  }) async {
+    final String currentUserId = _getCurrentUserId();
+    final WriteBatch batch = _firestore.batch();
+
+    final Map<String, dynamic> currentSummary = ChatSummary(
+      chatId: chatId,
+      otherUserId: otherUserId,
+      lastMessage: lastMessage,
+      lastTimestamp: timestamp,
+    ).toMap();
+    final Map<String, dynamic> otherSummary = ChatSummary(
+      chatId: chatId,
+      otherUserId: currentUserId,
+      lastMessage: lastMessage,
+      lastTimestamp: timestamp,
+    ).toMap();
+
+    final DocumentReference meRef = _firestore
+        .collection('user_chats')
+        .doc(currentUserId)
+        .collection('chats')
+        .doc(otherUserId);
+    final DocumentReference otherRef = _firestore
+        .collection('user_chats')
+        .doc(otherUserId)
+        .collection('chats')
+        .doc(currentUserId);
+
+    batch.set(meRef, currentSummary, SetOptions(merge: true));
+    batch.set(otherRef, otherSummary, SetOptions(merge: true));
+
+    await batch.commit();
+  }
+
+  // Delete a chat for current user (metadata and messages option)
+  Future<void> deleteChatForCurrentUser(String otherUserId, {bool deleteMessages = false}) async {
+    try {
+      final String currentUserId = _getCurrentUserId();
+      final String chatId = _getChatId(otherUserId);
+
+      // Remove the chat summary for current user
+      await _firestore
+          .collection('user_chats')
+          .doc(currentUserId)
+          .collection('chats')
+          .doc(otherUserId)
+          .delete();
+
+      if (deleteMessages) {
+        // Delete all messages in the chat thread
+        final messagesRef = _firestore
+            .collection('chats')
+            .doc(chatId)
+            .collection('messages');
+        final query = await messagesRef.get();
+        final WriteBatch batch = _firestore.batch();
+        for (final doc in query.docs) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+      }
+    } catch (e) {
+      print('Error deleting chat: $e');
+    }
   }
 
   // Anonymous chat - create a temporary chat room

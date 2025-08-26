@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/firebase_service.dart';
 import '../models/group_model.dart';
 import 'group_chat_screen.dart';
+import '../providers/auth_provider.dart';
 
 // Simple Groups Screen - Easy to understand for beginners
 class GroupsScreen extends StatefulWidget {
@@ -150,60 +152,154 @@ class _GroupsScreenState extends State<GroupsScreen> {
   // Show create group dialog
   void _showCreateGroupDialog() {
     final TextEditingController groupNameController = TextEditingController();
-    final TextEditingController memberController = TextEditingController();
-    List<String> members = [];
+    final TextEditingController addByUsernameController = TextEditingController();
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+
+    final List<String> memberIds = [];
+    final List<String> memberLabels = [];
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Create New Group'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: groupNameController,
-              decoration: const InputDecoration(
-                labelText: 'Group Name',
-                hintText: 'Enter group name',
-                border: OutlineInputBorder(),
-              ),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Create New Group'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: groupNameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Group Name',
+                    hintText: 'Enter group name',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: addByUsernameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Add by username',
+                          hintText: 'e.g., john_doe',
+                          border: OutlineInputBorder(),
+                        ),
+                        onSubmitted: (_) async {
+                          await _addMemberByUsername(addByUsernameController, auth, memberIds, memberLabels, setState);
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () async {
+                        await _addMemberByUsername(addByUsernameController, auth, memberIds, memberLabels, setState);
+                      },
+                      child: const Text('Add'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (memberIds.isNotEmpty)
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (int i = 0; i < memberIds.length; i++)
+                        Chip(
+                          label: Text(memberLabels[i]),
+                          onDeleted: () {
+                            setState(() {
+                              memberIds.removeAt(i);
+                              memberLabels.removeAt(i);
+                            });
+                          },
+                        ),
+                    ],
+                  ),
+              ],
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: memberController,
-              decoration: const InputDecoration(
-                labelText: 'Add Member (User ID)',
-                hintText: 'Enter user ID to add',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 8),
-            if (members.isNotEmpty)
-              Text('Members: ${members.join(', ')}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
           ),
-          ElevatedButton(
-            onPressed: () {
-              if (groupNameController.text.trim().isNotEmpty) {
-                // Add current user to members
-                members.add('current_user_id'); // In real app, get from auth
-                
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (groupNameController.text.trim().isEmpty) return;
+
+                // Always include current user
+                final String? currentUserId = auth.currentUser?.uid;
+                final List<String> finalMembers = [
+                  if (currentUserId != null && currentUserId.isNotEmpty) currentUserId,
+                  ...memberIds,
+                ];
+                final uniqueMembers = finalMembers.toSet().toList();
+
+                // Require at least 2 members (including current user)
+                if (uniqueMembers.length < 2) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Add at least one more member to create a group'),
+                      ),
+                    );
+                  }
+                  return;
+                }
+
                 _firebaseService.createGroup(
                   groupNameController.text.trim(),
-                  members,
+                  uniqueMembers,
                 );
                 Navigator.pop(context);
-              }
-            },
-            child: const Text('Create'),
-          ),
-        ],
+              },
+              child: const Text('Create'),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  Future<void> _addMemberByUsername(
+    TextEditingController controller,
+    AuthProvider auth,
+    List<String> memberIds,
+    List<String> memberLabels,
+    void Function(void Function()) setState,
+  ) async {
+    final term = controller.text.trim();
+    if (term.isEmpty) return;
+
+    final result = await auth.searchUser(term);
+    if (result == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User not found')),
+        );
+      }
+      return;
+    }
+
+    if (memberIds.contains(result.uid)) {
+      controller.clear();
+      return;
+    }
+
+    // Prevent adding self twice (we add current user on create)
+    if (result.uid == auth.currentUser?.uid) {
+      controller.clear();
+      return;
+    }
+
+    setState(() {
+      memberIds.add(result.uid);
+      memberLabels.add(result.fullName.isNotEmpty ? result.fullName : result.username);
+    });
+    controller.clear();
   }
 }

@@ -23,6 +23,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final FirebaseService _firebaseService = FirebaseService();
   final ScrollController _scrollController = ScrollController();
+  late final Stream<List<MessageModel>> _messagesStream;
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +44,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
           // Messages list
           Expanded(
             child: StreamBuilder<List<MessageModel>>(
-              stream: _firebaseService.getGroupMessages(widget.groupId),
+              stream: _messagesStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
@@ -283,5 +284,11 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _messagesStream = _firebaseService.getGroupMessages(widget.groupId);
   }
 }

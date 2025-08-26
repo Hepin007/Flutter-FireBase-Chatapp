@@ -263,6 +263,14 @@ class _SearchScreenState extends State<SearchScreen> {
   // Start chat function
   void _startChat() {
     if (_searchResult != null) {
+      // Ensure chat summary exists by sending an empty system message as metadata seed is not ideal.
+      // Instead, we'll create or update chat metadata with a placeholder lastMessage.
+      final firebase = FirebaseService();
+      firebase
+          .sendMessage(_searchResult!.uid, '')
+          .then((_) {})
+          .catchError((_) {});
+
       Navigator.push(
         context,
         MaterialPageRoute(

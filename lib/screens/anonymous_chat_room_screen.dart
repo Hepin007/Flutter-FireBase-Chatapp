@@ -19,6 +19,7 @@ class _AnonymousChatRoomScreenState extends State<AnonymousChatRoomScreen> {
   final TextEditingController _messageController = TextEditingController();
   final FirebaseService _firebaseService = FirebaseService();
   final ScrollController _scrollController = ScrollController();
+  late final Stream<List<MessageModel>> _messagesStream;
 
   @override
   Widget build(BuildContext context) {
@@ -59,7 +60,7 @@ class _AnonymousChatRoomScreenState extends State<AnonymousChatRoomScreen> {
           // Messages list
           Expanded(
             child: StreamBuilder<List<MessageModel>>(
-              stream: _firebaseService.getAnonymousMessages(widget.chatId),
+              stream: _messagesStream,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
@@ -296,5 +297,11 @@ class _AnonymousChatRoomScreenState extends State<AnonymousChatRoomScreen> {
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _messagesStream = _firebaseService.getAnonymousMessages(widget.chatId);
   }
 }
