@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/firebase_service.dart';
 import '../models/group_model.dart';
+import '../models/user_model.dart';
 import 'group_chat_screen.dart';
 import '../providers/auth_provider.dart';
 
@@ -152,22 +153,24 @@ class _GroupsScreenState extends State<GroupsScreen> {
   // Show create group dialog
   void _showCreateGroupDialog() {
     final TextEditingController groupNameController = TextEditingController();
-    final TextEditingController addByUsernameController = TextEditingController();
     final auth = Provider.of<AuthProvider>(context, listen: false);
 
-    final List<String> memberIds = [];
-    final List<String> memberLabels = [];
+    final List<String> selectedMemberIds = [];
+    final List<String> selectedMemberLabels = [];
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           title: const Text('Create New Group'),
-          content: SingleChildScrollView(
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 400,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Group name input
                 TextField(
                   controller: groupNameController,
                   decoration: const InputDecoration(
@@ -177,48 +180,88 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: addByUsernameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Add by username',
-                          hintText: 'e.g., john_doe',
-                          border: OutlineInputBorder(),
-                        ),
-                        onSubmitted: (_) async {
-                          await _addMemberByUsername(addByUsernameController, auth, memberIds, memberLabels, setState);
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: () async {
-                        await _addMemberByUsername(addByUsernameController, auth, memberIds, memberLabels, setState);
-                      },
-                      child: const Text('Add'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                if (memberIds.isNotEmpty)
+                
+                // Selected members
+                if (selectedMemberIds.isNotEmpty) ...[
+                  const Text(
+                    'Selected Members:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      for (int i = 0; i < memberIds.length; i++)
+                      for (int i = 0; i < selectedMemberIds.length; i++)
                         Chip(
-                          label: Text(memberLabels[i]),
+                          label: Text(selectedMemberLabels[i]),
                           onDeleted: () {
                             setState(() {
-                              memberIds.removeAt(i);
-                              memberLabels.removeAt(i);
+                              selectedMemberIds.removeAt(i);
+                              selectedMemberLabels.removeAt(i);
                             });
                           },
                         ),
                     ],
                   ),
+                  const SizedBox(height: 16),
+                ],
+                
+                // Available users from chat list
+                const Text(
+                  'Select from your contacts:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: StreamBuilder<List<UserModel>>(
+                    stream: _firebaseService.getUserChats(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      
+                      if (snapshot.hasError) {
+                        return Center(child: Text('Error: ${snapshot.error}'));
+                      }
+                      
+                      List<UserModel> users = snapshot.data ?? [];
+                      if (users.isEmpty) {
+                        return const Center(
+                          child: Text('No contacts found. Start chatting with someone first!'),
+                        );
+                      }
+                      
+                      return ListView.builder(
+                        itemCount: users.length,
+                        itemBuilder: (context, index) {
+                          final user = users[index];
+                          final isSelected = selectedMemberIds.contains(user.uid);
+                          
+                          return CheckboxListTile(
+                            title: Text(user.fullName.isNotEmpty ? user.fullName : user.username),
+                            subtitle: Text('@${user.username}'),
+                            value: isSelected,
+                            onChanged: (bool? value) {
+                              setState(() {
+                                if (value == true) {
+                                  selectedMemberIds.add(user.uid);
+                                  selectedMemberLabels.add(user.fullName.isNotEmpty ? user.fullName : user.username);
+                                } else {
+                                  final index = selectedMemberIds.indexOf(user.uid);
+                                  if (index != -1) {
+                                    selectedMemberIds.removeAt(index);
+                                    selectedMemberLabels.removeAt(index);
+                                  }
+                                }
+                              });
+                            },
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
               ],
             ),
           ),
@@ -229,25 +272,28 @@ class _GroupsScreenState extends State<GroupsScreen> {
             ),
             ElevatedButton(
               onPressed: () {
-                if (groupNameController.text.trim().isEmpty) return;
+                if (groupNameController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter a group name')),
+                  );
+                  return;
+                }
 
                 // Always include current user
                 final String? currentUserId = auth.currentUser?.uid;
                 final List<String> finalMembers = [
                   if (currentUserId != null && currentUserId.isNotEmpty) currentUserId,
-                  ...memberIds,
+                  ...selectedMemberIds,
                 ];
                 final uniqueMembers = finalMembers.toSet().toList();
 
                 // Require at least 2 members (including current user)
                 if (uniqueMembers.length < 2) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Add at least one more member to create a group'),
-                      ),
-                    );
-                  }
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Select at least one more member to create a group'),
+                    ),
+                  );
                   return;
                 }
 
@@ -265,41 +311,4 @@ class _GroupsScreenState extends State<GroupsScreen> {
     );
   }
 
-  Future<void> _addMemberByUsername(
-    TextEditingController controller,
-    AuthProvider auth,
-    List<String> memberIds,
-    List<String> memberLabels,
-    void Function(void Function()) setState,
-  ) async {
-    final term = controller.text.trim();
-    if (term.isEmpty) return;
-
-    final result = await auth.searchUser(term);
-    if (result == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User not found')),
-        );
-      }
-      return;
-    }
-
-    if (memberIds.contains(result.uid)) {
-      controller.clear();
-      return;
-    }
-
-    // Prevent adding self twice (we add current user on create)
-    if (result.uid == auth.currentUser?.uid) {
-      controller.clear();
-      return;
-    }
-
-    setState(() {
-      memberIds.add(result.uid);
-      memberLabels.add(result.fullName.isNotEmpty ? result.fullName : result.username);
-    });
-    controller.clear();
-  }
 }

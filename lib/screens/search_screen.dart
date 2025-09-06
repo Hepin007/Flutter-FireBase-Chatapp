@@ -239,7 +239,7 @@ class _SearchScreenState extends State<SearchScreen> {
         _isLoading = false;
       });
 
-      if (result == null) {
+      if (result == null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('User not found'),
@@ -252,12 +252,14 @@ class _SearchScreenState extends State<SearchScreen> {
         _isLoading = false;
       });
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 

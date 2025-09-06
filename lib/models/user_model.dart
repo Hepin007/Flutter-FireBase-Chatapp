@@ -22,6 +22,7 @@ class UserModel {
     return {
       'uid': uid,
       'username': username,
+      'usernameLower': username.toLowerCase(), // For case-insensitive search
       'email': email,
       'phoneNumber': phoneNumber,
       'fullName': fullName,

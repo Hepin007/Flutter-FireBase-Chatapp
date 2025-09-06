@@ -60,6 +60,20 @@ class _AnonymousChatScreenState extends State<AnonymousChatScreen> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton.icon(
+                onPressed: _joinRoomById,
+                icon: const Icon(Icons.key),
+                label: const Text('Join Room by ID'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
                 onPressed: _joinRandomChat,
                 icon: const Icon(Icons.join_full),
                 label: const Text('Join Random Chat'),
@@ -98,11 +112,40 @@ class _AnonymousChatScreenState extends State<AnonymousChatScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      'Room ID: ${_currentChatId!.substring(0, 8)}...',
-                      style: const TextStyle(
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Room ID: $_currentChatId',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontFamily: 'monospace',
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.copy, size: 20),
+                            onPressed: _copyRoomId,
+                            tooltip: 'Copy Room ID',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Share this ID with others to let them join!',
+                      style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey,
+                        color: Colors.blue,
+                        fontStyle: FontStyle.italic,
                       ),
                     ),
                   ],
@@ -156,8 +199,9 @@ class _AnonymousChatScreenState extends State<AnonymousChatScreen> {
                     ),
                   ),
                   SizedBox(height: 8),
-                  Text('• Join a random chat room to chat with others'),
-                  Text('• Create a new room and share the ID with friends'),
+                  Text('• Join Room by ID: Enter a specific room ID to join'),
+                  Text('• Join Random Chat: Get matched with random users'),
+                  Text('• Create New Room: Create a room and share the ID'),
                   Text('• All messages are anonymous'),
                   Text('• Leave anytime to end the conversation'),
                 ],
@@ -176,6 +220,8 @@ class _AnonymousChatScreenState extends State<AnonymousChatScreen> {
       // In a real app, you'd find an existing room
       String chatId = await _firebaseService.createAnonymousChat();
       
+      if (!mounted) return;
+      
       setState(() {
         _currentChatId = chatId;
       });
@@ -187,6 +233,8 @@ class _AnonymousChatScreenState extends State<AnonymousChatScreen> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: $e'),
@@ -201,6 +249,8 @@ class _AnonymousChatScreenState extends State<AnonymousChatScreen> {
     try {
       String chatId = await _firebaseService.createAnonymousChat();
       
+      if (!mounted) return;
+      
       setState(() {
         _currentChatId = chatId;
       });
@@ -212,6 +262,8 @@ class _AnonymousChatScreenState extends State<AnonymousChatScreen> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: $e'),
@@ -230,6 +282,172 @@ class _AnonymousChatScreenState extends State<AnonymousChatScreen> {
           builder: (context) => AnonymousChatRoomScreen(
             chatId: _currentChatId!,
           ),
+        ),
+      );
+    }
+  }
+
+  // Join room by ID
+  void _joinRoomById() {
+    final TextEditingController roomIdController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Join Room by ID'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Enter the room ID to join an existing anonymous chat room.',
+              style: TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: roomIdController,
+              decoration: const InputDecoration(
+                labelText: 'Room ID',
+                hintText: 'Enter room ID here...',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.key),
+              ),
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final roomId = roomIdController.text.trim();
+              if (roomId.isNotEmpty) {
+                Navigator.pop(context);
+                _joinSpecificRoom(roomId);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter a room ID'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
+            },
+            child: const Text('Join Room'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Join specific room by ID
+  Future<void> _joinSpecificRoom(String roomId) async {
+    try {
+      // Show loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Checking room...'),
+            ],
+          ),
+        ),
+      );
+
+      // Check if room exists
+      bool roomExists = await _firebaseService.checkAnonymousChatExists(roomId);
+      
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+      
+      if (roomExists) {
+        setState(() {
+          _currentChatId = roomId;
+        });
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Successfully joined room! You can now enter the chat.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Room not found or is inactive. Please check the room ID.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Close loading dialog if still open
+      if (mounted) Navigator.pop(context);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to join room: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Copy room ID to clipboard
+  void _copyRoomId() {
+    if (_currentChatId != null) {
+      // In a real app, you'd use Clipboard.setData
+      // For now, we'll show a dialog with the room ID
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Room ID'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Share this room ID with others:'),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: SelectableText(
+                  _currentChatId!,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Others can join by entering this ID in the "Join Room by ID" option.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
         ),
       );
     }

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uuid/uuid.dart';
@@ -42,7 +43,7 @@ class FirebaseService {
         timestamp: newMessage.timestamp,
       );
     } catch (e) {
-      print('Error sending message: $e');
+      debugPrint('Error sending message: $e');
     }
   }
 
@@ -82,7 +83,7 @@ class FirebaseService {
           .doc(groupId)
           .set(newGroup.toMap());
     } catch (e) {
-      print('Error creating group: $e');
+      debugPrint('Error creating group: $e');
     }
   }
 
@@ -104,7 +105,7 @@ class FirebaseService {
           .doc(newMessage.messageId)
           .set(newMessage.toMap());
     } catch (e) {
-      print('Error sending group message: $e');
+      debugPrint('Error sending group message: $e');
     }
   }
 
@@ -248,7 +249,7 @@ class FirebaseService {
         await batch.commit();
       }
     } catch (e) {
-      print('Error deleting chat: $e');
+      debugPrint('Error deleting chat: $e');
     }
   }
 
@@ -269,7 +270,7 @@ class FirebaseService {
 
       return chatId;
     } catch (e) {
-      print('Error creating anonymous chat: $e');
+      debugPrint('Error creating anonymous chat: $e');
       return '';
     }
   }
@@ -291,7 +292,7 @@ class FirebaseService {
           .doc(newMessage.messageId)
           .set(newMessage.toMap());
     } catch (e) {
-      print('Error sending anonymous message: $e');
+      debugPrint('Error sending anonymous message: $e');
     }
   }
 
@@ -308,5 +309,20 @@ class FirebaseService {
             return MessageModel.fromMap(doc.data());
           }).toList();
         });
+  }
+
+  // Check if anonymous chat room exists
+  Future<bool> checkAnonymousChatExists(String chatId) async {
+    try {
+      DocumentSnapshot doc = await _firestore
+          .collection('anonymous_chats')
+          .doc(chatId)
+          .get();
+      
+      return doc.exists && (doc.data() as Map<String, dynamic>?)?['active'] == true;
+    } catch (e) {
+      debugPrint('Error checking anonymous chat: $e');
+      return false;
+    }
   }
 }

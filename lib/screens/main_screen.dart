@@ -96,9 +96,14 @@ class _MainScreenState extends State<MainScreen> {
 
   // Logout function
   Future<void> _logout() async {
+    // Store context reference before any async operations
+    final currentContext = context;
+    final navigator = Navigator.of(currentContext);
+    final authProvider = Provider.of<AuthProvider>(currentContext, listen: false);
+    
     // Show confirmation dialog
     bool? confirm = await showDialog<bool>(
-      context: context,
+      context: currentContext,
       builder: (context) => AlertDialog(
         title: const Text('Logout'),
         content: const Text('Are you sure you want to logout?'),
@@ -116,14 +121,10 @@ class _MainScreenState extends State<MainScreen> {
     );
 
     if (confirm == true) {
-      // Get auth provider and logout
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      await authProvider.logout();
-      
-      // Navigate back to login screen
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/login');
-      }
+      // Navigate back to login screen immediately
+      navigator.pushReplacementNamed('/login');
+      // Logout in background
+      authProvider.logout();
     }
   }
 }

@@ -201,8 +201,13 @@ class ProfileScreen extends StatelessWidget {
 
   // Logout function
   Future<void> _logout(BuildContext context) async {
+    // Store context reference before any async operations
+    final currentContext = context;
+    final navigator = Navigator.of(currentContext);
+    final authProvider = Provider.of<AuthProvider>(currentContext, listen: false);
+    
     bool? confirm = await showDialog<bool>(
-      context: context,
+      context: currentContext,
       builder: (context) => AlertDialog(
         title: const Text('Logout'),
         content: const Text('Are you sure you want to logout?'),
@@ -220,12 +225,10 @@ class ProfileScreen extends StatelessWidget {
     );
 
     if (confirm == true) {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      await authProvider.logout();
-      
-      if (context.mounted) {
-        Navigator.pushReplacementNamed(context, '/login');
-      }
+      // Navigate back to login screen immediately
+      navigator.pushReplacementNamed('/login');
+      // Logout in background
+      authProvider.logout();
     }
   }
 }

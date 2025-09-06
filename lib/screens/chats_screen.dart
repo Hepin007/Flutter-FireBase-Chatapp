@@ -92,9 +92,10 @@ class ChatsScreen extends StatelessWidget {
                     ) ??
                     false;
               },
-              onDismissed: (_) async {
+              onDismissed: (_) {
                 // Delete only metadata by default
-                await firebaseService.deleteChatForCurrentUser(user.uid, deleteMessages: false);
+                firebaseService.deleteChatForCurrentUser(user.uid, deleteMessages: false);
+                // Show immediate feedback since the chat is already removed from UI
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Chat removed')),
                 );

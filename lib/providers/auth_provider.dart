@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
@@ -45,7 +45,7 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
       }
     } catch (e) {
-      print('Error getting user data: $e');
+      debugPrint('Error getting user data: $e');
     }
   }
 
@@ -97,7 +97,7 @@ class AuthProvider extends ChangeNotifier {
 
       return true;
     } catch (e) {
-      print('Registration error: $e');
+      debugPrint('Registration error: $e');
       return false;
     }
   }
@@ -115,7 +115,7 @@ class AuthProvider extends ChangeNotifier {
       );
       return true;
     } catch (e) {
-      print('Login error: $e');
+      debugPrint('Login error: $e');
       return false;
     }
   }
@@ -125,7 +125,7 @@ class AuthProvider extends ChangeNotifier {
     try {
       await _auth.signOut();
     } catch (e) {
-      print('Logout error: $e');
+      debugPrint('Logout error: $e');
     }
   }
 
@@ -133,23 +133,40 @@ class AuthProvider extends ChangeNotifier {
   Future<UserModel?> searchUser(String searchTerm) async {
     try {
       final String term = searchTerm.trim();
+      if (term.isEmpty) return null;
 
-      // Search by username (case-insensitive via usernameLower)
-      QuerySnapshot usernameQuery = await _firestore
+      // First try exact username match (case-insensitive)
+      QuerySnapshot exactUsernameQuery = await _firestore
           .collection('users')
           .where('usernameLower', isEqualTo: term.toLowerCase())
+          .limit(1)
           .get();
 
-      if (usernameQuery.docs.isNotEmpty) {
+      if (exactUsernameQuery.docs.isNotEmpty) {
         return UserModel.fromMap(
-          usernameQuery.docs.first.data() as Map<String, dynamic>,
+          exactUsernameQuery.docs.first.data() as Map<String, dynamic>,
         );
       }
 
-      // Search by phone number
+      // Try partial username match (starts with)
+      QuerySnapshot partialUsernameQuery = await _firestore
+          .collection('users')
+          .where('usernameLower', isGreaterThanOrEqualTo: term.toLowerCase())
+          .where('usernameLower', isLessThan: '${term.toLowerCase()}\uf8ff')
+          .limit(1)
+          .get();
+
+      if (partialUsernameQuery.docs.isNotEmpty) {
+        return UserModel.fromMap(
+          partialUsernameQuery.docs.first.data() as Map<String, dynamic>,
+        );
+      }
+
+      // Search by phone number (exact match)
       QuerySnapshot phoneQuery = await _firestore
           .collection('users')
           .where('phoneNumber', isEqualTo: term)
+          .limit(1)
           .get();
 
       if (phoneQuery.docs.isNotEmpty) {
@@ -160,7 +177,7 @@ class AuthProvider extends ChangeNotifier {
 
       return null; // User not found
     } catch (e) {
-      print('Search error: $e');
+      debugPrint('Search error: $e');
       return null;
     }
   }
