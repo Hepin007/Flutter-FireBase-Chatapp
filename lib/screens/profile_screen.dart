@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import 'edit_profile_screen.dart';
+import 'change_password_screen.dart';
 
 // Simple Profile Screen - Easy to understand for beginners
 class ProfileScreen extends StatelessWidget {
@@ -167,34 +169,20 @@ class ProfileScreen extends StatelessWidget {
 
   // Edit profile function
   void _editProfile(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Profile'),
-        content: const Text('This feature is not implemented yet.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const EditProfileScreen(),
       ),
     );
   }
 
   // Change password function
   void _changePassword(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Change Password'),
-        content: const Text('This feature is not implemented yet.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const ChangePasswordScreen(),
       ),
     );
   }
@@ -203,7 +191,6 @@ class ProfileScreen extends StatelessWidget {
   Future<void> _logout(BuildContext context) async {
     // Store context reference before any async operations
     final currentContext = context;
-    final navigator = Navigator.of(currentContext);
     final authProvider = Provider.of<AuthProvider>(currentContext, listen: false);
     
     bool? confirm = await showDialog<bool>(
@@ -225,10 +212,44 @@ class ProfileScreen extends StatelessWidget {
     );
 
     if (confirm == true) {
-      // Navigate back to login screen immediately
-      navigator.pushReplacementNamed('/login');
-      // Logout in background
-      authProvider.logout();
+      // Show loading indicator
+      showDialog(
+        context: currentContext,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+      
+      try {
+        // Logout first
+        await authProvider.logout();
+        
+        // Close loading dialog
+        if (currentContext.mounted) {
+          Navigator.of(currentContext).pop();
+        }
+        
+        // Navigate back to login screen
+        if (currentContext.mounted) {
+          Navigator.of(currentContext).pushReplacementNamed('/login');
+        }
+      } catch (e) {
+        // Close loading dialog
+        if (currentContext.mounted) {
+          Navigator.of(currentContext).pop();
+        }
+        
+        // Show error message
+        if (currentContext.mounted) {
+          ScaffoldMessenger.of(currentContext).showSnackBar(
+            SnackBar(
+              content: Text('Logout failed: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 }

@@ -137,12 +137,21 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            Text(
-              _formatMessageTime(message.timestamp),
-              style: TextStyle(
-                fontSize: 10,
-                color: isMe ? Colors.white70 : Colors.grey,
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _formatMessageTime(message.timestamp),
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: isMe ? Colors.white70 : Colors.grey,
+                  ),
+                ),
+                if (isMe) ...[
+                  const SizedBox(width: 4),
+                  _buildMessageStatus(message),
+                ],
+              ],
             ),
           ],
         ),
@@ -200,10 +209,13 @@ class _ChatScreenState extends State<ChatScreen> {
 
   // Send message function
   void _sendMessage() {
-    if (_messageController.text.trim().isNotEmpty) {
+    final messageText = _messageController.text.trim();
+    
+    // Validate message is not empty and not just whitespace
+    if (messageText.isNotEmpty && messageText.length > 0) {
       _firebaseService.sendMessage(
         widget.receiverId,
-        _messageController.text.trim(),
+        messageText,
       );
       _messageController.clear();
       
@@ -217,7 +229,39 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         }
       });
+    } else {
+      // Show error if trying to send empty message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a message'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
     }
+  }
+
+  // Build message status indicator
+  Widget _buildMessageStatus(MessageModel message) {
+    IconData iconData;
+    Color iconColor;
+    
+    if (message.isSeen) {
+      iconData = Icons.done_all;
+      iconColor = Colors.black;
+    } else if (message.isDelivered) {
+      iconData = Icons.done_all;
+      iconColor = Colors.white70;
+    } else {
+      iconData = Icons.done;
+      iconColor = Colors.white70;
+    }
+    
+    return Icon(
+      iconData,
+      size: 12,
+      color: iconColor,
+    );
   }
 
   // Format message time
@@ -244,5 +288,11 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _messagesStream = _firebaseService.getMessages(widget.receiverId);
+    
+    // Mark messages as read and seen when chat screen opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _firebaseService.markMessagesAsRead(widget.receiverId);
+      _firebaseService.markMessagesAsSeen(widget.receiverId);
+    });
   }
 }

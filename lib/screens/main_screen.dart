@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/notification_provider.dart';
+import '../widgets/notification_badge.dart';
 import 'chats_screen.dart';
 import 'search_screen.dart';
 import 'groups_screen.dart';
@@ -38,6 +40,16 @@ class _MainScreenState extends State<MainScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // Initialize notification provider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final notificationProvider = Provider.of<NotificationProvider>(context, listen: false);
+      notificationProvider.startListening();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       // App bar with title and logout button
@@ -58,38 +70,55 @@ class _MainScreenState extends State<MainScreen> {
       body: _screens[_currentIndex],
       
       // Bottom navigation bar
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _currentIndex,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
+      bottomNavigationBar: Consumer<NotificationProvider>(
+        builder: (context, notificationProvider, child) {
+          return BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            currentIndex: _currentIndex,
+            onTap: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
+            selectedItemColor: Theme.of(context).colorScheme.primary,
+            unselectedItemColor: Colors.grey,
+            items: [
+              BottomNavigationBarItem(
+                icon: Stack(
+                  children: [
+                    const Icon(Icons.chat),
+                    if (notificationProvider.hasUnreadMessages)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: NotificationBadge(
+                          count: notificationProvider.formattedTotalUnreadCount,
+                          size: 16,
+                        ),
+                      ),
+                  ],
+                ),
+                label: 'Chats',
+              ),
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.search),
+                label: 'Search',
+              ),
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.group),
+                label: 'Groups',
+              ),
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.visibility_off),
+                label: 'Anonymous',
+              ),
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.person),
+                label: 'Profile',
+              ),
+            ],
+          );
         },
-        selectedItemColor: Theme.of(context).colorScheme.primary,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.chat),
-            label: 'Chats',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: 'Search',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.group),
-            label: 'Groups',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.visibility_off),
-            label: 'Anonymous',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
       ),
     );
   }

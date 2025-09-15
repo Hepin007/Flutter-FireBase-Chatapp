@@ -25,8 +25,11 @@ class AuthProvider extends ChangeNotifier {
       if (user != null) {
         // User is logged in, get their data
         _getUserData(user.uid);
+        // Set user as online
+        _setUserOnlineStatus(true);
       } else {
-        // User is logged out
+        // User is logged out, set as offline
+        _setUserOnlineStatus(false);
         _currentUser = null;
         notifyListeners();
       }
@@ -180,5 +183,107 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('Search error: $e');
       return null;
     }
+  }
+
+  // Check if username is available
+  Future<bool> isUsernameAvailable(String username) async {
+    try {
+      final String usernameLower = username.trim().toLowerCase();
+      final QuerySnapshot existing = await _firestore
+          .collection('users')
+          .where('usernameLower', isEqualTo: usernameLower)
+          .limit(1)
+          .get();
+
+      return existing.docs.isEmpty;
+    } catch (e) {
+      debugPrint('Error checking username availability: $e');
+      return false;
+    }
+  }
+
+  // Update user profile
+  Future<bool> updateProfile({
+    required String fullName,
+    required String username,
+    required String phoneNumber,
+  }) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return false;
+
+      // Update user data in Firestore
+      await _firestore.collection('users').doc(user.uid).update({
+        'fullName': fullName,
+        'username': username,
+        'usernameLower': username.toLowerCase(),
+        'phoneNumber': phoneNumber,
+      });
+
+      // Update current user model
+      _currentUser = UserModel(
+        uid: user.uid,
+        username: username,
+        email: _currentUser?.email ?? '',
+        phoneNumber: phoneNumber,
+        fullName: fullName,
+        isOnline: _currentUser?.isOnline ?? false,
+      );
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error updating profile: $e');
+      return false;
+    }
+  }
+
+  // Send password reset email
+  Future<bool> sendPasswordResetEmail(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+      return true;
+    } catch (e) {
+      debugPrint('Error sending password reset email: $e');
+      return false;
+    }
+  }
+
+  // Set user online status
+  Future<void> _setUserOnlineStatus(bool isOnline) async {
+    try {
+      final user = _auth.currentUser;
+      if (user != null) {
+        await _firestore.collection('users').doc(user.uid).update({
+          'isOnline': isOnline,
+          'lastSeen': DateTime.now(),
+        });
+        
+        // Update current user model
+        if (_currentUser != null) {
+          _currentUser = UserModel(
+            uid: _currentUser!.uid,
+            username: _currentUser!.username,
+            email: _currentUser!.email,
+            phoneNumber: _currentUser!.phoneNumber,
+            fullName: _currentUser!.fullName,
+            isOnline: isOnline,
+          );
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error setting online status: $e');
+    }
+  }
+
+  // Set user as offline (call this when app goes to background)
+  Future<void> setUserOffline() async {
+    await _setUserOnlineStatus(false);
+  }
+
+  // Set user as online (call this when app comes to foreground)
+  Future<void> setUserOnline() async {
+    await _setUserOnlineStatus(true);
   }
 }

@@ -18,13 +18,16 @@ class FirebaseService {
     try {
       // Create a unique chat ID (combine both user IDs)
       String chatId = _getChatId(receiverId);
+      final currentUserId = _getCurrentUserId();
       
-      // Create message model
+      // Create message model with delivered status
       MessageModel newMessage = MessageModel(
         messageId: _uuid.v4(),
-        senderId: _getCurrentUserId(),
+        senderId: currentUserId,
         message: message,
         timestamp: DateTime.now(),
+        isDelivered: true, // Mark as delivered when sent
+        isRead: false, // Not read yet by receiver
       );
 
       // Save message to Firestore
@@ -35,12 +38,13 @@ class FirebaseService {
           .doc(newMessage.messageId)
           .set(newMessage.toMap());
 
-      // Upsert chat metadata for both users
+      // Upsert chat metadata for both users with unread count
       await _upsertChatSummaryForUsers(
         chatId: chatId,
         otherUserId: receiverId,
         lastMessage: message,
         timestamp: newMessage.timestamp,
+        incrementUnreadForReceiver: true,
       );
     } catch (e) {
       debugPrint('Error sending message: $e');
@@ -162,6 +166,22 @@ class FirebaseService {
         });
   }
 
+  // Get user's chat summaries (with unread counts)
+  Stream<List<ChatSummary>> getUserChatSummaries() {
+    final String currentUserId = _getCurrentUserId();
+    return _firestore
+        .collection('user_chats')
+        .doc(currentUserId)
+        .collection('chats')
+        .orderBy('lastTimestamp', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            return ChatSummary.fromMap(doc.data());
+          }).toList();
+        });
+  }
+
   // Helper method to get current user ID
   String _getCurrentUserId() {
     // Get the current user ID from Firebase Auth
@@ -187,21 +207,46 @@ class FirebaseService {
     required String otherUserId,
     required String lastMessage,
     required DateTime timestamp,
+    bool incrementUnreadForReceiver = false,
   }) async {
     final String currentUserId = _getCurrentUserId();
     final WriteBatch batch = _firestore.batch();
+
+    // Get current unread counts
+    int currentUserUnreadCount = 0;
+    int otherUserUnreadCount = 0;
+
+    if (incrementUnreadForReceiver) {
+      // Get current unread count for the receiver
+      final otherUserRef = _firestore
+          .collection('user_chats')
+          .doc(otherUserId)
+          .collection('chats')
+          .doc(currentUserId);
+      
+      final otherUserDoc = await otherUserRef.get();
+      if (otherUserDoc.exists) {
+        final data = otherUserDoc.data() as Map<String, dynamic>?;
+        otherUserUnreadCount = (data?['unreadCount'] as int? ?? 0) + 1;
+      } else {
+        otherUserUnreadCount = 1;
+      }
+    }
 
     final Map<String, dynamic> currentSummary = ChatSummary(
       chatId: chatId,
       otherUserId: otherUserId,
       lastMessage: lastMessage,
       lastTimestamp: timestamp,
+      unreadCount: currentUserUnreadCount,
     ).toMap();
+    
     final Map<String, dynamic> otherSummary = ChatSummary(
       chatId: chatId,
       otherUserId: currentUserId,
       lastMessage: lastMessage,
       lastTimestamp: timestamp,
+      unreadCount: otherUserUnreadCount,
     ).toMap();
 
     final DocumentReference meRef = _firestore
@@ -323,6 +368,67 @@ class FirebaseService {
     } catch (e) {
       debugPrint('Error checking anonymous chat: $e');
       return false;
+    }
+  }
+
+  // Mark messages as read for a specific chat
+  Future<void> markMessagesAsRead(String receiverId) async {
+    try {
+      final String currentUserId = _getCurrentUserId();
+      final String chatId = _getChatId(receiverId);
+      
+      // Update all unread messages from the other user to read
+      final query = await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .where('senderId', isEqualTo: receiverId)
+          .where('isRead', isEqualTo: false)
+          .get();
+      
+      final batch = _firestore.batch();
+      for (final doc in query.docs) {
+        batch.update(doc.reference, {'isRead': true});
+      }
+      
+      await batch.commit();
+      
+      // Reset unread count for the receiver in current user's chat summary
+      await _firestore
+          .collection('user_chats')
+          .doc(currentUserId)
+          .collection('chats')
+          .doc(receiverId)
+          .update({'unreadCount': 0});
+    } catch (e) {
+      debugPrint('Error marking messages as read: $e');
+    }
+  }
+
+  // Mark messages as seen
+  Future<void> markMessagesAsSeen(String receiverId) async {
+    try {
+      String chatId = _getChatId(receiverId);
+      String currentUserId = _getCurrentUserId();
+      
+      // Get all messages from the receiver that are not seen
+      QuerySnapshot messages = await _firestore
+          .collection('chats')
+          .doc(chatId)
+          .collection('messages')
+          .where('senderId', isEqualTo: receiverId)
+          .where('isSeen', isEqualTo: false)
+          .get();
+      
+      // Update all messages to seen
+      WriteBatch batch = _firestore.batch();
+      for (DocumentSnapshot doc in messages.docs) {
+        batch.update(doc.reference, {'isSeen': true});
+      }
+      
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error marking messages as seen: $e');
     }
   }
 }

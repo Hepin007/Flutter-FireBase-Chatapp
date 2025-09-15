@@ -5,6 +5,8 @@ class MessageModel {
   final String message;       // The actual message text
   final DateTime timestamp;   // When was it sent
   final bool isRead;          // Has the message been read?
+  final bool isDelivered;     // Has the message been delivered?
+  final bool isSeen;          // Has the message been seen?
 
   // Constructor - this creates a new message
   MessageModel({
@@ -13,6 +15,8 @@ class MessageModel {
     required this.message,
     required this.timestamp,
     this.isRead = false,
+    this.isDelivered = false,
+    this.isSeen = false,
   });
 
   // Convert message data to a map (for saving to Firebase)
@@ -23,6 +27,8 @@ class MessageModel {
       'message': message,
       'timestamp': timestamp,
       'isRead': isRead,
+      'isDelivered': isDelivered,
+      'isSeen': isSeen,
     };
   }
 
@@ -34,6 +40,8 @@ class MessageModel {
       message: map['message'] ?? '',
       timestamp: map['timestamp']?.toDate() ?? DateTime.now(),
       isRead: map['isRead'] ?? false,
+      isDelivered: map['isDelivered'] ?? false,
+      isSeen: map['isSeen'] ?? false,
     );
   }
 }

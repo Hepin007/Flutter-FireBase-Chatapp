@@ -4,12 +4,14 @@ class ChatSummary {
   final String otherUserId;          // The other participant user ID
   final String lastMessage;          // Last message preview
   final DateTime lastTimestamp;      // Last activity time
+  final int unreadCount;             // Number of unread messages
 
   ChatSummary({
     required this.chatId,
     required this.otherUserId,
     required this.lastMessage,
     required this.lastTimestamp,
+    this.unreadCount = 0,
   });
 
   Map<String, dynamic> toMap() {
@@ -18,6 +20,7 @@ class ChatSummary {
       'otherUserId': otherUserId,
       'lastMessage': lastMessage,
       'lastTimestamp': lastTimestamp,
+      'unreadCount': unreadCount,
     };
   }
 
@@ -27,6 +30,7 @@ class ChatSummary {
       otherUserId: map['otherUserId'] ?? '',
       lastMessage: map['lastMessage'] ?? '',
       lastTimestamp: map['lastTimestamp']?.toDate() ?? DateTime.now(),
+      unreadCount: map['unreadCount'] ?? 0,
     );
   }
 }
